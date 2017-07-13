@@ -26,7 +26,7 @@ Flutter é uma nova plataforma para o desenvolvimento de aplicativos Android e i
 
 Esta é parte um de duas partes, Introdução ao Flutter e seus conceitos de "widget" e "interpolação". Eu vou ilustrar a força desses conceitos, usando-os para exibir e animar gráficos como o mostrado acima. Nos exemplos, o código completo deve fornecer um nível de clareza ao Dart. E incluirei detalhes suficientes para que você possa acompanhar em seu próprio laptop (e emulador ou dispositivo) e experimente o comprimento do ciclo de desenvolvimento Flutter.
 
-O ponto de partida é a [instalação do Flutter](https://flutter.io/setup/). Rode
+O ponto de partida é a [instalação do Flutter](https://flutter.io/setup/). Execute
 
 ```
 $ flutter doctor
@@ -146,7 +146,7 @@ MaterialApp                    (navigation)
 
 * Com uma árvore imutável de widgets imutáveis ​​que definem a interface do usuário, a única maneira de mudar essa interface é reconstruir a árvore. Flutter cuida disso, quando o próximo quadro `frame` é devido. Tudo o que temos a fazer é dizer ao Flutter que algum estado na qual uma sub-eárvore depende foi alterado. A raiz de uma sub-árvore dependente desse estado deve ser um `StatefulWidget`. Como qualquer widget decente, um `StatefulWidget` não é mutable, mas sua sub-árvore é construída por um objeto `State` que é. Flutter mantém os objetos `State` por meio da reconstrução das árvores e anexa cada respectivo widget na nova árvore durante a construção. Eles então determinam como a sub-árvore de widget foi construída. No nosso aplicativo, `ChartPage` é um `StatefulWidget` com `ChartPageState` como seu `State`. Sempre que o usuário pressiona o botão, executamos algum código para alterar o `ChartPageState`. Nós demarcamos a mudança com `setState` para que Flutter possa fazer seu arrumação e agendar a árvore de widget para reconstrui-lá. Quando isso acontece, o `ChartPageState` irá criar uma sub-árvore ligeiramente diferente enraizada na nova instância do `ChartPage`.
 
-Os widgets imutáveis e as árvores dependentes de estado são as principais ferramentas que o Flutter coloca à nossa disposição para abordar as complexidades do gerenciamento do estado em UI elaboradas que respondem a eventos assíncronos, como pressões de botões, tiques temporizados ou dados recebidos. Da experiência da minha área de trabalho eu diria que essa complexidade é muito real. Avaliar a força da abordagem Flutter é - e deve ser - um exercício para o leitor: experimente-o em algo não trivial.
+Os widgets imutáveis e as árvores dependentes de estado são as principais ferramentas que o Flutter coloca à nossa disposição para abordar as complexidades do gerenciamento do estado em UI elaboradas que respondem a eventos assíncronos, como pressões de botões, tiques temporizados ou dados recebidos. Da experiência na minha área de trabalho eu diria que essa complexidade é muito real. Avaliar a força da abordagem Flutter é - e deve ser - um exercício para o leitor: experimente-o em algo não trivial.
 
 
 
