@@ -148,6 +148,447 @@ MaterialApp                    (navigation)
 
 Os widgets imutáveis e as árvores dependentes de estado são as principais ferramentas que o Flutter coloca à nossa disposição para abordar as complexidades do gerenciamento do estado em UI elaboradas que respondem a eventos assíncronos, como pressões de botões, tiques temporizados ou dados recebidos. Da experiência na minha área de trabalho eu diria que essa complexidade é muito real. Avaliar a força da abordagem Flutter é - e deve ser - um exercício para o leitor: experimente-o em algo não trivial.
 
+O nosso aplicativo de gráficos permanecerá simples em termos de estrutura de widgets, mas vamos fazer um pouco de gráficos personalizados animados. O primeiro passo é substituir a representação textual de cada conjunto de dados por um gráfico muito simples. Uma vez que um conjunto de dados atualmente envolve apenas um único número no intervalo `0..100`, o gráfico será um gráfico de barras com uma única barra, cuja altura é determinada por esse número. Usaremos um valor inicial de `50` para evitar uma altura `null`:
+
+```dart
+import 'dart:math';
+
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(new MaterialApp(home: new ChartPage()));
+}
+
+class ChartPage extends StatefulWidget {
+  @override
+  ChartPageState createState() => new ChartPageState();
+}
+
+class ChartPageState extends State<ChartPage> {
+  final random = new Random();
+  int dataSet = 50;
+
+  void changeData() {
+    setState(() {
+      dataSet = random.nextInt(100);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return new Scaffold(
+      body: new Center(
+        child: new CustomPaint(
+          size: new Size(200.0, 100.0),
+          painter: new BarChartPainter(dataSet.toDouble()),
+        ),
+      ),
+      floatingActionButton: new FloatingActionButton(
+        child: new Icon(Icons.refresh),
+        onPressed: changeData,
+      ),
+    );
+  }
+}
+
+class BarChartPainter extends CustomPainter {
+  static const barWidth = 10.0;
+
+  BarChartPainter(this.barHeight);
+
+  final double barHeight;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = new Paint()
+      ..color = Colors.blue[400]
+      ..style = PaintingStyle.fill;
+    canvas.drawRect(
+      new Rect.fromLTWH(
+        (size.width - barWidth) / 2.0,
+        size.height - barHeight,
+        barWidth,
+        barHeight,
+      ),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(BarChartPainter old) => barHeight != old.barHeight;
+}
+```
+
+O `CustomPaint` é um widget que delega pintura para uma estratégia `CustomPainter`. Nossa implementação dessa estratégia desenha uma única barra.
+
+O próximo passo é adicionar animação. Sempre que o conjunto de dados muda, queremos que a barra altere a altura suavemente ao invés de abruptamente. Flutter tem um conceito `AnimationController` para orquestrar animações, e ao registrar um ouvinte, nos diz quando o valor da animação - um duplo executando de zero a um - muda. Sempre que isso acontecer, podemos chamar `setState` como antes e atualizar o `ChartPageState`.
+
+Por razões de exposição, a nossa primeiro início será feio:
+
+```dart
+import 'dart:math';
+import 'dart:ui' show lerpDouble;
+
+import 'package:flutter/animation.dart';
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(new MaterialApp(home: new ChartPage()));
+}
+
+class ChartPage extends StatefulWidget {
+  @override
+  ChartPageState createState() => new ChartPageState();
+}
+
+class ChartPageState extends State<ChartPage> with TickerProviderStateMixin {
+  final random = new Random();
+  int dataSet = 50;
+  AnimationController animation;
+  double startHeight;   // Strike one.
+  double currentHeight; // Strike two.
+  double endHeight;     // Strike three. Refactor.
+
+  @override
+  void initState() {
+    super.initState();
+    animation = new AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    )
+      ..addListener(() {
+        setState(() {
+          currentHeight = lerpDouble( // Strike one.
+            startHeight,
+            endHeight,
+            animation.value,
+          );
+        });
+      });
+    startHeight = 0.0;                // Strike two.
+    currentHeight = 0.0;
+    endHeight = dataSet.toDouble();
+    animation.forward();
+  }
+
+  @override
+  void dispose() {
+    animation.dispose();
+    super.dispose();
+  }
+
+  void changeData() {
+    setState(() {
+      startHeight = currentHeight;    // Strike three. Refactor.
+      dataSet = random.nextInt(100);
+      endHeight = dataSet.toDouble();
+      animation.forward(from: 0.0);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return new Scaffold(
+      body: new Center(
+        child: new CustomPaint(
+          size: new Size(200.0, 100.0),
+          painter: new BarChartPainter(currentHeight),
+        ),
+      ),
+      floatingActionButton: new FloatingActionButton(
+        child: new Icon(Icons.refresh),
+        onPressed: changeData,
+      ),
+    );
+  }
+}
+
+class BarChartPainter extends CustomPainter {
+  static const barWidth = 10.0;
+
+  BarChartPainter(this.barHeight);
+
+  final double barHeight;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = new Paint()
+      ..color = Colors.blue[400]
+      ..style = PaintingStyle.fill;
+    canvas.drawRect(
+      new Rect.fromLTWH(
+        (size.width - barWidth) / 2.0,
+        size.height - barHeight,
+        barWidth,
+        barHeight,
+      ),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(BarChartPainter old) => barHeight != old.barHeight;
+}
+```
+
+Nossa!!!. A complexidade já vê sua cabeça feia, e nosso conjunto de dados ainda é apenas um único número! O código precisa configurar o controle de animação mas isso é uma preocupação menor, uma vez que não ramifica quando obtemos mais dados do gráfico. O problema real são as variáveis `startHeight`, `currentHeight` e `endHeight` que refletem as mudanças feitas no conjunto de dados e no valor da animação, e são atualizados em três lugares diferentes.
+
+Precisamos de um conceito para lidar com essa bagunça.
+
+Entre com **tweens**. Embora longe de ser exclusivo do Flutter, eles são um conceito deliciosamente simples para estruturar o código de animação. A seA principal contribuição é substituir a abordagem imperativa acima por uma funcional. A interpolação é um #valor#. Ele descreve o caminho para pegar entre dois pontos no espaço de outros valores, como gráficos de barras, pois o valor da animação é executado de zero a um.
+
+Tweens são genéricos no tipo desses outros valores e podem ser expressos em Dart como objetos do tipo `Tween<T>`:
+
+```dart
+abstract class Tween<T> {
+  final T begin;
+  final T end;
+  
+  Tween(this.begin, this.end);
+  
+  T lerp(double t);
+}
+```
+
+O jargão `lerp` vem do campo de computação gráfica e é um atalho para #interpolação linear# (como substantivo) e #interpolar linearmente# (como um verbo). O parâmetro `t` é o valor da animação, e uma interpolação deverá portanto, lerp desde o `início begin` (quando `t` é zero) ao `fim end` (quando `t` é um).
+
+A classe `Tween<T>` do Flutter SDK é muito semelhante à acima, mas é uma classe concreta que suporta a mutação `inicio` e `fim`. Não estou inteiramente certo por que essa escolha foi feita, mas provavelmente há boas razões para isso em áreas de suporte de animação do SDK que ainda não tenho para explorar. No seguinte, usarei o Flutter `Tween<T>`, mas finjo que é imutável.
+
+Podemos limpar nosso código usando um `Tween<double>` para a altura da barra:
+
+```dart
+import 'dart:math';
+
+import 'package:flutter/animation.dart';
+import 'package:flutter/material.dart';
+
+void main() {
+  runApp(new MaterialApp(home: new ChartPage()));
+}
+
+class ChartPage extends StatefulWidget {
+  @override
+  ChartPageState createState() => new ChartPageState();
+}
+
+class ChartPageState extends State<ChartPage> with TickerProviderStateMixin {
+  final random = new Random();
+  int dataSet = 50;
+  AnimationController animation;
+  Tween<double> tween;
+
+  @override
+  void initState() {
+    super.initState();
+    animation = new AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    tween = new Tween<double>(begin: 0.0, end: dataSet.toDouble());
+    animation.forward();
+  }
+
+  @override
+  void dispose() {
+    animation.dispose();
+    super.dispose();
+  }
+
+  void changeData() {
+    setState(() {
+      dataSet = random.nextInt(100);
+      tween = new Tween<double>(
+        begin: tween.evaluate(animation),
+        end: dataSet.toDouble(),
+      );
+      animation.forward(from: 0.0);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return new Scaffold(
+      body: new Center(
+        child: new CustomPaint(
+          size: new Size(200.0, 100.0),
+          painter: new BarChartPainter(tween.animate(animation)),
+        ),
+      ),
+      floatingActionButton: new FloatingActionButton(
+        child: new Icon(Icons.refresh),
+        onPressed: changeData,
+      ),
+    );
+  }
+}
+
+class BarChartPainter extends CustomPainter {
+  static const barWidth = 10.0;
+
+  BarChartPainter(Animation<double> animation)
+      : animation = animation,
+        super(repaint: animation);
+
+  final Animation<double> animation;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final barHeight = animation.value;
+    final paint = new Paint()
+      ..color = Colors.blue[400]
+      ..style = PaintingStyle.fill;
+    canvas.drawRect(
+      new Rect.fromLTWH(
+        (size.width - barWidth) / 2.0,
+        size.height - barHeight,
+        barWidth,
+        barHeight,
+      ),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(BarChartPainter old) => false;
+}
+```
+
+Estamos usando o `Tween` para empacotar em um único valor os pontos finais da animação referente a altura da barra. Ele interage perfeitamente com o `AnimationController` e com o `CustomPainter`, evitando a reconstrução da árvore de widgets durante a animação, já que a infra-estrutura do Flutter agora marca o `CustomPaint` para repintar a animação em cada tick (movimento do ponteiro de segundos do relógio - ticke-taque), em vez de marcar toda a sub-árvore do `ChartPage` para reconstrui-la, relançar e repintar. Estas são melhorias definitivas. Mas há mais no conceito de interpolação; Ele oferece #estrutura# para organizar nossos pensamentos e códigos, e nós realmente não tomamos isso a sério. O conceito de interpolação diz,
+
+Animar os `T`s, traçando todo o caminho no espaço de todos os `T`s, pois o valor da animação é executado de zero a um. Modelo do caminho com um `Tween<T>`.
+
+No código acima, `T` é um `double`, mas não queremos animar `doubles`, queremos animar gráficos de barras! Bem, OK, barras simples por enquanto, mas o conceito é forte, e ele escala, se o deixarmos.
+
+(Você pode estar se perguntando por que não tomamos esse argumento um passo adiante e insistimos em animar os conjuntos de dados, em vez de suas representações como gráficos de barras. Isso ocorre porque os conjuntos de dados - em contraste com os gráficos de barras que são objetos gráficos - geralmente não habitam espaços onde existem caminhos suaves. Os conjuntos de dados para gráficos de barras geralmente envolvem dados numéricos mapeados em categorias de dados discretos. Mas, sem a representação espacial como gráficos de barras, não existe uma noção razoável de um caminho suave entre dois conjuntos de dados que envolvem diferentes categorias.)
+
+Retornando ao nosso código, precisaremos de um tipo `Bar` e um `BarTween` para animá-lo. Vamos extrair as classes relacionadas à barra em seu próprio arquivo `bar.dart` ao lado de `main.dart`:
+
+```dart
+import 'dart:ui' show lerpDouble;
+
+import 'package:flutter/animation.dart';
+import 'package:flutter/material.dart';
+
+class Bar {
+  Bar(this.height);
+
+  final double height;
+
+  static Bar lerp(Bar begin, Bar end, double t) {
+    return new Bar(lerpDouble(begin.height, end.height, t));
+  }
+}
+
+class BarTween extends Tween<Bar> {
+  BarTween(Bar begin, Bar end) : super(begin: begin, end: end);
+
+  @override
+  Bar lerp(double t) => Bar.lerp(begin, end, t);
+}
+
+class BarChartPainter extends CustomPainter {
+  static const barWidth = 10.0;
+
+  BarChartPainter(Animation<Bar> animation)
+      : animation = animation,
+        super(repaint: animation);
+
+  final Animation<Bar> animation;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bar = animation.value;
+    final paint = new Paint()
+      ..color = Colors.blue[400]
+      ..style = PaintingStyle.fill;
+    canvas.drawRect(
+      new Rect.fromLTWH(
+        (size.width - barWidth) / 2.0,
+        size.height - bar.height,
+        barWidth,
+        bar.height,
+      ),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(BarChartPainter old) => false;
+}
+```
+
+Estou seguindo uma convenção do Flutter SDK aqui na definição de `BarTween.lerp` em termos de um método estático na classe `Bar`. Isso funciona bem para tipos simples como `Bar`, `Color`, `Rect` e muitos outros, mas precisamos reconsiderar a abordagem para tipos de gráfico mais envolvidos. Não há `double.lerp` no Dart SDK, então estamos usando a função `lerpDouble` do pacote `dart:ui` para o mesmo efeito.
+
+Nosso aplicativo agora pode ser re-expressado em termos de barras como mostrado no código abaixo; Aproveitei a oportunidade para dispensar o campo `dataSet`.
+
+```dart
+import 'dart:math';
+
+import 'package:flutter/animation.dart';
+import 'package:flutter/material.dart';
+
+import 'bar.dart';
+
+void main() {
+  runApp(new MaterialApp(home: new ChartPage()));
+}
+
+class ChartPage extends StatefulWidget {
+  @override
+  ChartPageState createState() => new ChartPageState();
+}
+
+class ChartPageState extends State<ChartPage> with TickerProviderStateMixin {
+  final random = new Random();
+  AnimationController animation;
+  BarTween tween;
+
+  @override
+  void initState() {
+    super.initState();
+    animation = new AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    tween = new BarTween(new Bar(0.0), new Bar(50.0));
+    animation.forward();
+  }
+
+  @override
+  void dispose() {
+    animation.dispose();
+    super.dispose();
+  }
+
+  void changeData() {
+    setState(() {
+      tween = new BarTween(
+        tween.evaluate(animation),
+        new Bar(100.0 * random.nextDouble()),
+      );
+      animation.forward(from: 0.0);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return new Scaffold(
+      body: new Center(
+        child: new CustomPaint(
+          size: new Size(200.0, 100.0),
+          painter: new BarChartPainter(tween.animate(animation)),
+        ),
+      ),
+      floatingActionButton: new FloatingActionButton(
+        child: new Icon(Icons.refresh),
+        onPressed: changeData,
+      ),
+    );
+  }
+}
+```
+
+A nova versão é mais longa, e o código extra deve levar seu peso. Será, à medida que abordarmos gráficos mais complexos na segunda parte. Nossos requisitos falam de barras coloridas, barras múltiplas, dados parciais, barras empilhadas, barras agrupadas, empilhamento e agrupamento de barras, ... tudo isso animado. Fique ligado.
 
 
 
