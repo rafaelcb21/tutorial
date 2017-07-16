@@ -20,7 +20,7 @@ A animação foi implementada usando `BarTween`, e afirmei que o conceito de int
 
 Comecemos pela adição de cor à nossa barra única. Nós adicionamos um campo de cores `color` ao lado do campo de altura `height` da classe de `Bar` e atualizamos `Bar.lerp` para interpolar os dois. Esse padrão é típico:
 
-#Lerp entre valores compostos por componentes correspondentes.#
+*Lerp entre valores compostos por componentes correspondentes.*
 
 Lembre-se da primeira parte que "lerp" é uma forma curta de "interpolar linearmente" ou "interpolação linear".
 
@@ -182,11 +182,11 @@ Há, no entanto, situações em que essa imagem bonita se rompe. Podemos desejar
 
 Você pode prontamente encontrar várias soluções ad-hoc diferentes para este problema, e então pode pedir ao seu designer UX que escolha entre elas. Essa é uma abordagem válida, embora eu acredite que seja útil ter em mente durante sua discussão a estrutura fundamental comum a essas diferentes soluções: a interpolação. Lembre-se da primeira parte:
 
-#Animar `T`s rastreando um caminho no espaço de todos os `T`s, pois o valor da animação é executado de zero a um. Modelar o caminho com um `Tween<T>`.#
+*Animar `T`s rastreando um caminho no espaço de todos os `T`s, pois o valor da animação é executado de zero a um. Modelar o caminho com um `Tween<T>`.*
 
 A questão central para responder com o designer UX é esta: Com intermediará os valores entre um gráfico com cinco barras e um com sete? Uma escolha óbvia é ter seis barras, mas precisamos de mais valores intermediários do que isso para animar suavemente. Precisamos desenhar barras de forma diferente, pisando fora do reino de barras de largura igual, uniformemente espaçadas, ajustadas a 200 pixels. Em outras palavras, o espaço dos valores de T devem ser generalizados.
 
-#Lerp entre valores com estruturas diferentes incorporando-os em um espaço de valores mais gerais, abrangendo como casos especiais tanto pontos finais de animação quanto todos os valores intermediários necessários.#
+*Lerp entre valores com estruturas diferentes incorporando-os em um espaço de valores mais gerais, abrangendo como casos especiais tanto pontos finais de animação quanto todos os valores intermediários necessários.*
 
 Podemos fazer isso em duas etapas. Primeiro, generalizamos o `Bar` para incluir a sua coordenada x e a largura como atributos:
 
@@ -213,7 +213,7 @@ Em segundo lugar, fazemos gráficos de suporte `BarChart` com diferentes contage
 
 Considere duas tabelas com cinco e sete barras, respectivamente. As barras para suas cinco categorias comuns, 0..5, podem ser animadas de forma composta como vimos acima. As barras com índice 5 e 6 não têm contrapartida no outro ponto final da animação, mas, como agora estamos livres para dar a cada barra sua própria posição e largura, podemos introduzir duas barras invisíveis para desempenhar esse papel. O efeito visual é que as barras 5 e 6 crescem em sua aparência final à medida que a animação prossegue. Animando na outra direção, as barras 5 e 6 diminuíram ou desapareceram na invisibilidade.
 
-#Lerp entre os valores compostos por lerping correspondendo nos componentes. Onde um componente está faltando no ponto final, use um componente invisível em seu lugar.#
+*Lerp entre os valores compostos por lerping correspondendo nos componentes. Onde um componente está faltando no ponto final, use um componente invisível em seu lugar.*
 
 Muitas vezes, existem várias maneiras de escolher componentes invisíveis. Digamos que nosso amigável designer UX decidiu usar barras de zero-largura, zero-altura com coordenadas x e cor herdada de sua contraparte visível. Vamos adicionar um método à `Bar` para criar uma versão colapsada de uma determinada instância.
 
@@ -340,7 +340,7 @@ Temos um passo a seguir antes de podermos abordar a animação do gráfico de ba
 ```
 A animação pode ser bonita e sedosa, mas ainda é confusa para o usuário. Por quê? Porque não preserva a semântica. Ele transforma um elemento gráfico representando a categoria de produto B em um que representa a categoria C, enquanto o de C vai em outro lugar. Só porque 2016 B passa a ser desenhado na mesma posição em que 2017 C aparece depois não implica que o primeiro se transformasse no último. Em vez disso, 2016 B deve desaparecer, 2016 C deve se mover para a esquerda e se transformar em 2017 C e 2017 D deve aparecer à sua direita. Podemos implementar essa mistura usando um dos algoritmos mais antigos do livro: mesclando listas ordenadas.
 
-#Lerp entre composição de valores por componentes lerping correspondendo semanticamente. Quando os componentes formam listas ordenadas, o algoritmo de mesclagem pode trazer esses componentes de forma par, usando componentes invisíveis conforme necessário para lidar com fusões unilaterais.#
+*Lerp entre composição de valores por componentes lerping correspondendo semanticamente. Quando os componentes formam listas ordenadas, o algoritmo de mesclagem pode trazer esses componentes de forma par, usando componentes invisíveis conforme necessário para lidar com fusões unilaterais.*
 
 Tudo o que precisamos é tornar as instâncias do `Bar` mutuamente comparáveis ​​em uma ordem linear. Então podemos juntá-los da seguinte maneira:
 
@@ -412,4 +412,107 @@ class BarChartTween extends Tween<BarChart> {
 ```
 Agora podemos remover o método estático `BarChart.lerp`.
 
+Vamos resumir o que aprendemos sobre o conceito de interpolação até agora:
+
+*Animar `T`s rastreando um caminho no espaço de todos os `T`s, pois o valor da animação é executado de zero a um. Modelar o caminho com um `Tween<T>`.*
+
+*Generalize o conceito de `T` conforme necessário até abranger todos os pontos finais da animação e valores intermediários.*
+
+*Lerp entre os valores compostos pelo componentes correspondentes ao lerping.*
+
+* *A correspondência deve ser baseada em semântica, e não em co-localização gráfica acidental.*
+
+* *Onde um componente está faltando em um ponto final de animação, use um componente invisível em seu lugar, possivelmente derivado do outro ponto final.*
+
+* *Onde os componentes formam listas ordenadas, use o algoritmo de mesclagem para trazer componentes semanticamente correspondentes em um par, apresentando componentes invisíveis conforme necessário para lidar com fusões unilaterais.*
+
+*Considere implementar tweens usando métodos estáticos `Xxx.lerp` para facilitar a reutilização em implementações de interpolação composta. Quando uma recomputação significativa ocorre através de chamadas para `Xxx.lerp` para um único caminho de animação, considere mover a computação para o construtor da classe `XxxTween` e permitir que suas instâncias hospedem o resultado da computação.*
+
+Armados com esses pensamentos, estamos finalmente em posição de animar gráficos mais complexos. Nós faremos barras empilhadas, barras agrupadas e barras agrupadas + agrupadas em sucessão rápida:
+
+* As barras empilhadas são usadas para conjuntos de dados onde as categorias são bidimensionais e faz sentido adicionar a quantidade numérica representada pelas alturas da barra. Um exemplo pode ser receita por produto e região geográfica. O empilhamento por produto facilita a comparação do desempenho do produto no mercado global. A empilhamento por região mostra quais regiões são importantes.
+
+![Image of Chart Image]
+(https://cdn-images-1.medium.com/max/800/1*qKUFM56S-ZonH1amVDDXTw.gif)
+###### Barras empilhadas
+
+* As barras agrupadas também são usadas para conjuntos de dados com categorias bidimensionais, mas onde não é significativo ou desejável empilhar as barras. Por exemplo, se a quantidade numérica for de mercado em porcentagem por produto e região, o empilhamento por produto não faz sentido. Mesmo quando o empilhamento faz sentido, o agrupamento pode ser preferível, pois torna mais fácil fazer comparações quantitativas em ambas as dimensões da categoria ao mesmo tempo.
+
+![Image of Chart Image]
+(https://cdn-images-1.medium.com/max/800/1*YiojxPiaWY7lB5v9iZVgDg.gif)
+###### Barras agrupadas
+
+* As barras agrupadas + empilhadas suportam categorias tridimensionais, como receita por produto, região geográfica e canal de vendas.
+
+![Image of Chart Image]
+(https://cdn-images-1.medium.com/max/800/1*9ObVOKbos4DoQsmsqbMnRQ.gif)
+###### Barras agrupadas + empilhadas
+
+Em todas as três variantes, a animação pode ser usada para visualizar as mudanças de conjunto de dados, introduzindo assim uma dimensão adicional (geralmente tempo) sem desordenar os gráficos.
+
+Para que a animação seja útil e não apenas bonita, precisamos certificar-se de que nosso lerp estja apenas entre componentes correspondentes semanticamente. Assim, o segmento de barras usado para representar a receita de um produto / região / canal específico em 2016 deve ser transformado em uma receita representativa para o mesmo produto / região / canal em 2017 (se presente).
+
+O algoritmo de mesclagem pode ser usado para garantir isso. Como você pode ter adivinhado a partir da discussão anterior, a fusão será posta em prática em vários níveis, refletindo a dimensionalidade das categorias. Mesclaremos pilhas e barras em gráficos em gráficos pilhados, grupos e barras em um agrupamento de gráficos, e todos os três em gráficos agrupados + pilhados.
+
+Para realizar isso sem muita duplicação de código, vamos resumir o algoritmo de mesclagem em um utilitário geral e colocá-lo em um arquivo próprio, `tween.dart`:
+
+```dart
+import 'package:flutter/animation.dart';
+import 'package:flutter/material.dart';
+
+abstract class MergeTweenable<T> {
+  T get empty;
+
+  Tween<T> tweenTo(T other);
+
+  bool operator <(T other);
+}
+
+class MergeTween<T extends MergeTweenable<T>> extends Tween<List<T>> {
+  MergeTween(List<T> begin, List<T> end) : super(begin: begin, end: end) {
+    final bMax = begin.length;
+    final eMax = end.length;
+    var b = 0;
+    var e = 0;
+    while (b + e < bMax + eMax) {
+      if (b < bMax && (e == eMax || begin[b] < end[e])) {
+        _tweens.add(begin[b].tweenTo(begin[b].empty));
+        b++;
+      } else if (e < eMax && (b == bMax || end[e] < begin[b])) {
+        _tweens.add(end[e].empty.tweenTo(end[e]));
+        e++;
+      } else {
+        _tweens.add(begin[b].tweenTo(end[e]));
+        b++;
+        e++;
+      }
+    }
+  }
+
+  final _tweens = <Tween<T>>[];
+
+  @override
+  List<T> lerp(double t) => new List.generate(
+        _tweens.length,
+        (i) => _tweens[i].lerp(t),
+      );
+}
+```
+A interface `MergeTweenable<T>` captura precisamente o que é necessário para poder criar uma interpolação de duas listas ordenadas de `T`s por mesclagem. Vamos instanciar o parâmetro de tipo `T` com `Bar`, `BarStack` e `BarGroup` e fazer todos esses tipos implementar `MergeTweenable<T>`.
+
+As implementações de empilhamento, agrupamento, e empilhamento + agrupamento foram escritas para serem diretamente comparáveis. Eu encorajo você a brincar com o código:
+
+* Mude o número de grupos, pilhas e barras criados pelo `BarChart.random`.
+
+* Mude as paletas de cores. Para barras empilhadas + agrupadas, eu usei uma paleta monocromática, porque acho que parece mais agradável. Você e seu designer UX podem discordar.
+
+* Substitua `BarChart.random` e o botão de ação flutuante por um seletor de ano e crie instâncias de `BarChart` a partir de conjuntos de dados realistas.
+
+* Implemente gráficos de barras horizontais.
+
+* Implementar outros tipos de gráfico (torta, linha, área empilhada). Anime-os usando `MergeTweenable<T>` ou similar.
+
+* Adicione legendas de gráfico e/ou rótulos e eixos, e então anime-os também.
+
+As tarefas das duas últimas balas são bastante desafiadoras. Diverta-se.
 
