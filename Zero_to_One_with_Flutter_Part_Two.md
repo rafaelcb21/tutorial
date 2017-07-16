@@ -516,3 +516,21 @@ As implementações de empilhamento, agrupamento, e empilhamento + agrupamento f
 
 As tarefas das duas últimas balas são bastante desafiadoras. Diverta-se.
 
+A restauração por animação com `BarChartPainter` está configurada nesta linha (linha 28 do bar.dart)
+
+```dart
+BarChartPainter(Animation<Bar> animation)
+  : animation = animation,
+    super(repaint: animation);
+```
+
+que contém uma chamada para o construtor do `CustomPainter` com o `Animation<Bar>` como argumento. Veja [aqui](https://docs.flutter.io/flutter/rendering/CustomPainter-class.html) a documentação pertinente da Flutter API. Não há mágica Dart envolvida, apenas uma chamada para um construtor de superclasse.
+
+Mais detalhes abaixo, caso você esteja interessado.
+
+A história detalhada envolve o conceito `RenderObject` que não discuti no meu artigo, pois é um conceito de nível inferior na arquitetura Flutter. Muitos widgets são suportados por um `RenderObject` que é responsável por renderizar o widget, ou seja, para lidar com o ciclo de vida em torno do layout e da pintura na tela.
+
+Assim, a restauração do `BarChartPainter` é realmente realizada na implementação do widget `CustomPaint` que configuramos com o `CustomPainter` (no [main.dart](https://gist.github.com/mravn-google/ec766e03aad1f4cca14cdae3e46170fa#file-main-dart-L53)). O `RenderObject` apoia que o widget anexa um ouvinte na `Animation`, e agende a repintura usando o método de ciclo de vida `markNeedsPaint` de `RenderObject` em cada tempo (tick) da animação. A linha relevante na atual implementação Flutter está [aqui](https://github.com/flutter/flutter/blob/master/packages/flutter/lib/src/rendering/proxy_box.dart#L1990).
+
+Quando uma novo frame é devido, cada "sujo" `RenderObject` é solicitado pelo framework Flutter para ele mesmo pintar na tela, e nossa então delegará a subclasse `CustomPainter` o que nós escrevermos.
+
